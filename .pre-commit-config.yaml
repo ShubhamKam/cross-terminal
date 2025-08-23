@@ -1,0 +1,114 @@
+# Pre-commit hooks configuration for Cross-Terminal project
+repos:
+  # Code formatting
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(.*\.md|.*\.txt)$
+      - id: end-of-file-fixer
+        exclude: ^(.*\.md|.*\.txt)$
+      - id: check-yaml
+      - id: check-json
+      - id: check-xml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+
+  # C++ code formatting
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v16.0.6
+    hooks:
+      - id: clang-format
+        files: \.(c|cc|cxx|cpp|h|hpp|hxx)$
+        args: ['-style=Google', '-i']
+
+  # CMake formatting
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
+        additional_dependencies: [cmakelang]
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.5
+    hooks:
+      - id: shellcheck
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.35.0
+    hooks:
+      - id: markdownlint
+        args: ['--fix']
+
+  # Local hooks for project-specific checks
+  - repo: local
+    hooks:
+      # Run unit tests before commit
+      - id: unit-tests
+        name: Run unit tests
+        entry: ./test.sh --fast
+        language: script
+        pass_filenames: false
+        stages: [commit]
+        
+      # Check for TODO/FIXME comments in production code
+      - id: check-todos
+        name: Check for TODO/FIXME in production code
+        entry: bash -c 'if grep -r "TODO\|FIXME" src/ --exclude-dir=tests; then echo "TODO/FIXME found in production code"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        
+      # Ensure test coverage requirements
+      - id: coverage-check
+        name: Check test coverage
+        entry: bash -c 'if [ -f "build/coverage.info" ]; then lcov --summary build/coverage.info | grep -E "lines\.\.\.\.\.\.: [0-9]+\.[0-9]+%" | awk "{if(\$2 < 80.0) exit 1}"; fi'
+        language: system
+        pass_filenames: false
+        stages: [push]
+        
+      # Validate CMakeLists.txt files
+      - id: cmake-lint
+        name: CMake lint
+        entry: bash -c 'find . -name "CMakeLists.txt" -exec cmake-lint {} \;'
+        language: system
+        files: CMakeLists\.txt$
+        
+      # Check for security issues in dependencies
+      - id: security-check
+        name: Security dependency check
+        entry: bash -c 'if command -v safety >/dev/null; then safety check; fi'
+        language: system
+        pass_filenames: false
+        stages: [push]
+        
+      # Validate Android manifest
+      - id: android-manifest-check
+        name: Android manifest validation
+        entry: bash -c 'if [ -f "android/app/src/main/AndroidManifest.xml" ]; then xmllint --noout android/app/src/main/AndroidManifest.xml; fi'
+        language: system
+        files: AndroidManifest\.xml$
+        
+      # Check for memory leaks in test code
+      - id: memory-leak-check
+        name: Memory leak detection
+        entry: bash -c 'if command -v valgrind >/dev/null && [ -f "build/unit_tests" ]; then valgrind --leak-check=full --error-exitcode=1 --quiet build/unit_tests; fi'
+        language: system
+        pass_filenames: false
+        stages: [push]
+        
+      # Verify build artifacts
+      - id: build-verification
+        name: Build verification
+        entry: bash -c './build.sh --release > /dev/null 2>&1'
+        language: system
+        pass_filenames: false
+        stages: [push]
+
+# Global configuration
+default_stages: [commit]
+fail_fast: true
+minimum_pre_commit_version: '2.15.0'

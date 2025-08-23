@@ -1,0 +1,320 @@
+name: Android Build and Deploy
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [published]
+
+env:
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -Dorg.gradle.daemon=false -Dkotlin.incremental=false"
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+    
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        add-to-path: false
+    
+    - name: Make gradlew executable
+      run: chmod +x android/gradlew
+      
+    - name: Run unit tests
+      run: |
+        cd android
+        ./gradlew test --stacktrace
+
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    needs: test
+    
+    outputs:
+      apk-debug: ${{ steps.sign_app.outputs.signedReleaseFile }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+    
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        add-to-path: false
+    
+    - name: Make gradlew executable
+      run: chmod +x android/gradlew
+    
+    - name: Create debug keystore
+      run: |
+        cd android/app
+        keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Debug,O=CrossTerminal,L=Debug,S=Debug,C=US"
+    
+    - name: Build debug APK
+      run: |
+        cd android
+        ./gradlew assembleDebug --stacktrace
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+    
+    - name: Build release APK
+      if: github.event_name == 'release'
+      run: |
+        cd android
+        ./gradlew assembleRelease --stacktrace
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        MYAPP_UPLOAD_STORE_FILE: ${{ secrets.SIGNING_KEY_STORE_PATH }}
+        MYAPP_UPLOAD_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        MYAPP_UPLOAD_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        MYAPP_UPLOAD_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+    
+    - name: Upload debug APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: cross-terminal-debug
+        path: android/app/build/outputs/apk/debug/cross-terminal-*-debug-*.apk
+    
+    - name: Upload release APK
+      if: github.event_name == 'release'
+      uses: actions/upload-artifact@v3
+      with:
+        name: cross-terminal-release
+        path: android/app/build/outputs/apk/release/cross-terminal-*-release-*.apk
+
+  instrumented-tests:
+    name: Instrumented Tests
+    runs-on: macos-latest
+    needs: build
+    
+    strategy:
+      matrix:
+        api-level: [29, 30, 33]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+    
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+    
+    - name: AVD cache
+      uses: actions/cache@v3
+      id: avd-cache
+      with:
+        path: |
+          ~/.android/avd/*
+          ~/.android/adb*
+        key: avd-${{ matrix.api-level }}
+    
+    - name: Create AVD and generate snapshot for caching
+      if: steps.avd-cache.outputs.cache-hit != 'true'
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: ${{ matrix.api-level }}
+        target: google_apis
+        arch: x86_64
+        force-avd-creation: false
+        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        disable-animations: false
+        script: echo "Generated AVD snapshot for caching."
+    
+    - name: Make gradlew executable
+      run: chmod +x android/gradlew
+    
+    - name: Run instrumented tests
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: ${{ matrix.api-level }}
+        target: google_apis
+        arch: x86_64
+        force-avd-creation: false
+        emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        disable-animations: true
+        script: |
+          cd android
+          ./gradlew connectedCheck --stacktrace
+
+  deploy-firebase:
+    name: Deploy to Firebase App Distribution
+    runs-on: ubuntu-latest
+    needs: [build, instrumented-tests]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'release'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download APK artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: cross-terminal-debug
+        path: ./artifacts
+    
+    - name: Upload to Firebase App Distribution
+      uses: wzieba/Firebase-Distribution-Github-Action@v1.7.0
+      with:
+        appId: ${{ secrets.FIREBASE_APP_ID }}
+        serviceCredentialsFileContent: ${{ secrets.CREDENTIAL_FILE_CONTENT }}
+        groups: testers
+        file: artifacts/cross-terminal-*-debug-*.apk
+        releaseNotes: |
+          Cross-Terminal v1.0.0-alpha
+          
+          New Features:
+          - GPU-accelerated terminal rendering
+          - Hardware control integration (GPIO, sensors)
+          - Real-time system monitoring
+          - IoT device connectivity
+          - AI-powered command assistance
+          
+          This is an alpha build for testing purposes.
+          Report issues at: https://github.com/username/cross-terminal/issues
+
+  deploy-github-releases:
+    name: Deploy to GitHub Releases
+    runs-on: ubuntu-latest
+    needs: [build, instrumented-tests]
+    if: github.event_name == 'release'
+    
+    steps:
+    - name: Download debug APK
+      uses: actions/download-artifact@v3
+      with:
+        name: cross-terminal-debug
+        path: ./debug-artifacts
+    
+    - name: Download release APK
+      uses: actions/download-artifact@v3
+      with:
+        name: cross-terminal-release
+        path: ./release-artifacts
+    
+    - name: Upload to GitHub Releases
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          debug-artifacts/cross-terminal-*-debug-*.apk
+          release-artifacts/cross-terminal-*-release-*.apk
+        generate_release_notes: true
+        prerelease: true
+        body: |
+          ## Cross-Terminal Android v${{ github.event.release.tag_name }}
+          
+          ### 🚀 New Features
+          - GPU-accelerated terminal rendering with sub-5ms latency
+          - Hardware control integration (GPIO, sensors, system monitoring)
+          - Real-time IoT device connectivity via MQTT
+          - AI-powered command suggestions and error analysis
+          - Cross-platform native performance optimization
+          
+          ### 📱 Android-Specific Features
+          - Full hardware sensor access (accelerometer, gyroscope, temperature)
+          - GPIO control for embedded systems and IoT projects
+          - System performance monitoring with real-time metrics
+          - Battery and power management integration
+          - Native Material Design UI with dark theme
+          
+          ### 🛠️ Installation
+          1. Download the APK file for your device architecture
+          2. Enable "Install from unknown sources" in Android settings
+          3. Install the APK and grant necessary permissions
+          4. Launch Cross-Terminal and enjoy!
+          
+          ### ⚠️ Alpha Release Notice
+          This is an alpha release for testing and feedback. Some features may be unstable.
+          Please report issues at: https://github.com/username/cross-terminal/issues
+          
+          ### 🔧 Technical Details
+          - **Minimum Android Version**: 7.0 (API 24)
+          - **Target Android Version**: 14 (API 34)
+          - **Architectures**: ARM64-v8a, ARMv7a
+          - **Size**: ~15MB (includes native libraries)
+          - **Permissions**: Camera, Location, Storage, Network, Sensors
+
+  notify:
+    name: Notify Build Status
+    runs-on: ubuntu-latest
+    needs: [deploy-firebase, deploy-github-releases]
+    if: always()
+    
+    steps:
+    - name: Send notification on success
+      if: needs.deploy-firebase.result == 'success' || needs.deploy-github-releases.result == 'success'
+      run: |
+        echo "✅ Cross-Terminal Android build and deployment successful!"
+        echo "🔗 Download from Firebase App Distribution or GitHub Releases"
+        echo "📱 Ready for mobile testing!"
+    
+    - name: Send notification on failure
+      if: needs.deploy-firebase.result == 'failure' || needs.deploy-github-releases.result == 'failure'
+      run: |
+        echo "❌ Cross-Terminal Android deployment failed!"
+        echo "🔍 Check the logs for more details"
+        echo "🛠️ Fix issues and retry deployment"

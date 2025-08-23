@@ -1,0 +1,273 @@
+name: Cross-Terminal CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # Unit and Integration Tests on Multiple Platforms
+  test-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential lcov
+        sudo apt-get install -y libgtest-dev libgmock-dev
+        
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DENABLE_COVERAGE=ON
+        
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j $(nproc)
+      
+    - name: Run Tests
+      working-directory: ${{github.workspace}}/build
+      run: |
+        ./test.sh --coverage
+        
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./build/coverage.info
+        flags: linux
+        name: codecov-linux
+
+  test-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        brew install cmake lcov
+        
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+        
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j $(sysctl -n hw.ncpu)
+      
+    - name: Run Tests
+      run: |
+        cd macos && ./test-macos.sh --coverage --memory
+        
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./build-macos/coverage.info
+        flags: macos
+        name: codecov-macos
+
+  test-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+      
+    - name: Build Native Tests
+      run: |
+        export ANDROID_NDK=$ANDROID_NDK_ROOT
+        mkdir -p build-android
+        cd build-android
+        cmake \
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-21 \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DENABLE_TESTING=ON \
+          ..
+        make -j $(nproc)
+        
+    - name: Run Android Tests
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 29
+        target: default
+        arch: x86_64
+        script: |
+          cd android
+          ./test-android.sh --native
+
+  # Code Quality and Security
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-format clang-tidy
+        
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem src/
+        
+    - name: Check code formatting
+      run: |
+        find src/ -name "*.cpp" -o -name "*.h" | xargs clang-format -i
+        git diff --exit-code || (echo "Code formatting issues found" && exit 1)
+        
+    - name: Run clang-tidy
+      run: |
+        cd build
+        run-clang-tidy -p . ../src/ -header-filter=.*
+
+  # Performance Benchmarks
+  benchmarks:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+        git clone https://github.com/google/benchmark.git
+        cd benchmark && cmake -E make_directory "build" && cd build
+        cmake -DCMAKE_BUILD_TYPE=Release ../
+        make -j $(nproc) && sudo make install
+        
+    - name: Build benchmarks
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_BENCHMARKS=ON
+        cmake --build build --config Release -j $(nproc)
+        
+    - name: Run benchmarks
+      run: |
+        cd build && ./benchmarks --benchmark_format=json > benchmark_results.json
+        
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: 'googlecpp'
+        output-file-path: build/benchmark_results.json
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+
+  # Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Documentation Generation
+  documentation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install Doxygen
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y doxygen graphviz
+        
+    - name: Generate documentation
+      run: |
+        doxygen Doxyfile
+        
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/html
+
+  # Build and Release
+  build-release:
+    needs: [test-linux, test-macos, test-android, code-quality]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Create Release Assets
+      run: |
+        # Build for multiple platforms
+        mkdir -p releases
+        
+        # Linux build
+        cmake -B build-linux -DCMAKE_BUILD_TYPE=Release
+        cmake --build build-linux --config Release -j $(nproc)
+        tar -czf releases/cross-terminal-linux.tar.gz -C build-linux cross-terminal
+        
+    - name: Create Release
+      uses: ncipollo/release-action@v1
+      if: startsWith(github.ref, 'refs/tags/v')
+      with:
+        artifacts: "releases/*"
+        token: ${{ secrets.GITHUB_TOKEN }}
+        draft: false
+        prerelease: false
+
+  # Notification on failure
+  notify-failure:
+    needs: [test-linux, test-macos, test-android, code-quality, security-scan]
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+    - name: Notify on failure
+      run: |
+        echo "CI pipeline failed. Please check the logs and fix the issues."
+        # Add notification logic here (Slack, Discord, email, etc.)
