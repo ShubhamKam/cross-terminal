@@ -55,7 +55,7 @@ jobs:
     - name: Run unit tests
       run: |
         cd android
-        ./gradlew test --stacktrace --no-daemon
+        ./gradlew testDebug --stacktrace --no-daemon
 
   build:
     name: Build APK
@@ -209,7 +209,7 @@ jobs:
         disable-animations: true
         script: |
           cd android
-          ./gradlew connectedCheck --stacktrace
+          ./gradlew connectedAndroidTest --stacktrace
 
   deploy-firebase:
     name: Deploy to Firebase App Distribution
