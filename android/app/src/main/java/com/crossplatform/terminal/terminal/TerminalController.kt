@@ -55,10 +55,10 @@ class TerminalController(private val context: Context) {
         @JvmStatic
         external fun nativeGetHardwareInfo(handle: Long): String
         
-        // Load native library
-        init {
-            System.loadLibrary("cross-terminal")
-        }
+        // Native library loading disabled for initial build
+        // init {
+        //     System.loadLibrary("cross-terminal")
+        // }
     }
     
     data class TerminalSession(

@@ -47,10 +47,15 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
       
+    - name: Setup Gradle wrapper
+      run: |
+        cd android
+        gradle wrapper --gradle-version=8.4
+        
     - name: Run unit tests
       run: |
         cd android
-        ./gradlew test --stacktrace
+        ./gradlew test --stacktrace --no-daemon
 
   build:
     name: Build APK
@@ -91,6 +96,11 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
     
+    - name: Setup Gradle wrapper
+      run: |
+        cd android
+        gradle wrapper --gradle-version=8.4
+    
     - name: Create debug keystore
       run: |
         cd android/app
@@ -99,7 +109,7 @@ jobs:
     - name: Build debug APK
       run: |
         cd android
-        ./gradlew assembleDebug --stacktrace
+        ./gradlew assembleDebug --stacktrace --no-daemon
       env:
         ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
     
@@ -107,7 +117,7 @@ jobs:
       if: github.event_name == 'release'
       run: |
         cd android
-        ./gradlew assembleRelease --stacktrace
+        ./gradlew assembleRelease --stacktrace --no-daemon
       env:
         ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         MYAPP_UPLOAD_STORE_FILE: ${{ secrets.SIGNING_KEY_STORE_PATH }}

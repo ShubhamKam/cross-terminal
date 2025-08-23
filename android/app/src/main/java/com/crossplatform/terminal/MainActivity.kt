@@ -53,10 +53,10 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.WAKE_LOCK
         )
         
-        // Load native library
-        init {
-            System.loadLibrary("cross-terminal")
-        }
+        // Native library loading disabled for initial build
+        // init {
+        //     System.loadLibrary("cross-terminal")
+        // }
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
