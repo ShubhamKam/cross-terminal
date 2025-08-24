@@ -50,7 +50,7 @@ jobs:
     - name: Setup Gradle wrapper
       run: |
         cd android
-        gradle wrapper --gradle-version=8.6
+        gradle wrapper --gradle-version=8.5
         
     - name: Run unit tests
       run: |
@@ -99,7 +99,7 @@ jobs:
     - name: Setup Gradle wrapper
       run: |
         cd android
-        gradle wrapper --gradle-version=8.6
+        gradle wrapper --gradle-version=8.5
     
     - name: Create debug keystore
       run: |
