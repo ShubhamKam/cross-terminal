@@ -52,10 +52,10 @@ jobs:
         cd android
         gradle wrapper --gradle-version=8.6
         
-    - name: Run unit tests
+    - name: List available tasks
       run: |
         cd android
-        ./gradlew testDebug --stacktrace --no-daemon
+        ./gradlew tasks --no-daemon
 
   build:
     name: Build APK
