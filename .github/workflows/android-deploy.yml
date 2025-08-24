@@ -52,10 +52,10 @@ jobs:
         cd android
         gradle wrapper --gradle-version=8.6
         
-    - name: List available tasks
+    - name: Run unit tests
       run: |
         cd android
-        ./gradlew tasks --no-daemon
+        ./gradlew app:testDebug --stacktrace --no-daemon
 
   build:
     name: Build APK
@@ -109,7 +109,7 @@ jobs:
     - name: Build debug APK
       run: |
         cd android
-        ./gradlew assembleDebug --stacktrace --no-daemon
+        ./gradlew app:assembleDebug --stacktrace --no-daemon
       env:
         ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
     
@@ -117,7 +117,7 @@ jobs:
       if: github.event_name == 'release'
       run: |
         cd android
-        ./gradlew assembleRelease --stacktrace --no-daemon
+        ./gradlew app:assembleRelease --stacktrace --no-daemon
       env:
         ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         MYAPP_UPLOAD_STORE_FILE: ${{ secrets.SIGNING_KEY_STORE_PATH }}
@@ -209,7 +209,7 @@ jobs:
         disable-animations: true
         script: |
           cd android
-          ./gradlew connectedAndroidTest --stacktrace
+          ./gradlew app:connectedAndroidTest --stacktrace
 
   deploy-firebase:
     name: Deploy to Firebase App Distribution
