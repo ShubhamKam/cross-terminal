@@ -50,7 +50,12 @@ jobs:
     - name: Setup Gradle wrapper
       run: |
         cd android
-        gradle wrapper --gradle-version=8.5
+        # Use our pre-configured wrapper properties
+        wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip -O gradle.zip
+        unzip -q gradle.zip
+        chmod +x gradle-8.5/bin/gradle
+        ./gradle-8.5/bin/gradle wrapper
+        rm -rf gradle.zip gradle-8.5
         
     - name: Run unit tests
       run: |
@@ -99,7 +104,12 @@ jobs:
     - name: Setup Gradle wrapper
       run: |
         cd android
-        gradle wrapper --gradle-version=8.5
+        # Use our pre-configured wrapper properties  
+        wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip -O gradle.zip
+        unzip -q gradle.zip
+        chmod +x gradle-8.5/bin/gradle
+        ./gradle-8.5/bin/gradle wrapper
+        rm -rf gradle.zip gradle-8.5
     
     - name: Create debug keystore
       run: |
