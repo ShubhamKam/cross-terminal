@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Terminal Colors -->
+    <color name="terminal_background">#FF1E1E1E</color>
+    <color name="terminal_text_primary">#FFFFFFFF</color>
+    <color name="terminal_text_secondary">#FFCCCCCC</color>
+    <color name="terminal_cursor">#FF00FF00</color>
+    <color name="terminal_selection">#FF3366CC</color>
+    <color name="terminal_accent">#FF00AA00</color>
+    
+    <!-- Hardware Panel Colors -->
+    <color name="hardware_panel_background">#FF2A2A2A</color>
+    <color name="hardware_text">#FFAAAAAA</color>
+    <color name="hardware_accent">#FF0088FF</color>
+    
+    <!-- Status Bar Colors -->
+    <color name="status_bar_background">#FF333333</color>
+    <color name="status_text">#FF888888</color>
+    
+    <!-- Material Colors -->
+    <color name="primary">#FF1E1E1E</color>
+    <color name="primary_variant">#FF000000</color>
+    <color name="secondary">#FF00AA00</color>
+    <color name="secondary_variant">#FF008800</color>
+    <color name="background">#FF1E1E1E</color>
+    <color name="surface">#FF2A2A2A</color>
+    <color name="error">#FFFF3333</color>
+    <color name="on_primary">#FFFFFFFF</color>
+    <color name="on_secondary">#FF000000</color>
+    <color name="on_background">#FFFFFFFF</color>
+    <color name="on_surface">#FFFFFFFF</color>
+    <color name="on_error">#FFFFFFFF</color>
+    
+    <!-- ANSI Colors for Terminal -->
+    <color name="ansi_black">#FF000000</color>
+    <color name="ansi_red">#FFFF0000</color>
+    <color name="ansi_green">#FF00FF00</color>
+    <color name="ansi_yellow">#FFFFFF00</color>
+    <color name="ansi_blue">#FF0000FF</color>
+    <color name="ansi_magenta">#FFFF00FF</color>
+    <color name="ansi_cyan">#FF00FFFF</color>
+    <color name="ansi_white">#FFFFFFFF</color>
+    
+    <!-- Bright ANSI Colors -->
+    <color name="ansi_bright_black">#FF808080</color>
+    <color name="ansi_bright_red">#FFFF8080</color>
+    <color name="ansi_bright_green">#FF80FF80</color>
+    <color name="ansi_bright_yellow">#FFFFFF80</color>
+    <color name="ansi_bright_blue">#FF8080FF</color>
+    <color name="ansi_bright_magenta">#FFFF80FF</color>
+    <color name="ansi_bright_cyan">#FF80FFFF</color>
+    <color name="ansi_bright_white">#FFFFFFFF</color>
+</resources>
